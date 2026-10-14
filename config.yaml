@@ -1,0 +1,78 @@
+# LinkedIn Assistant — your preferences. Edit freely; secrets go in .env, never here.
+
+profile:
+  name: Umesh Sharma
+  # Extra context for job matching / cover letters. Your resume and the positioning in
+  # Docs/Linked_Master_system.md Section 1 are loaded automatically on top of this.
+  summary: >
+    Data Science & AI undergraduate at IIT Madras (BS, 2024-2028) and AI/ML Intern at
+    PW LeapX, Bangalore (Dec 2025 - present). Builds LLM applications: RAG pipelines
+    (Qdrant, sentence-transformers), voice AI (Whisper), LLM-based call auditing
+    (Azure OpenAI), n8n agent automation, FastAPI backends. Looking for Applied AI /
+    GenAI / ML internships and entry-level roles; currently a student, so part-time,
+    remote or internship roles that fit alongside studies are a plus.
+  # Drop your resume PDF here; it is used for job scoring and cover letters.
+  resume_path: resume.pdf
+
+docs_dir: Docs
+
+llm:
+  # claude-code: uses the `claude` CLI on this Mac — your Claude Code login, or AgentRouter
+  #              automatically when AGENTROUTER_API_KEY is set in .env.
+  # anthropic-api: direct Anthropic API, needs ANTHROPIC_API_KEY.
+  backend: claude-code
+  model: opus                                   # used with your Claude Code login
+  agentrouter_model: deepseek-v4-flash                # used when AGENTROUTER_API_KEY is set; must be a model id AgentRouter offers
+  timeout_seconds: 600
+  # effort per task: low | medium | high | xhigh | max
+  effort_writing: high
+  effort_scoring: low
+
+timezone: Asia/Kolkata
+
+posting:
+  # Default slot times (local timezone). Replace once LinkedIn_Scheduling_System.md is added.
+  slots:
+    tofu: "09:00"
+    mofu: "13:00"
+    authority: "18:00"
+  # Random +/- minutes around each slot time (natural variation, per your docs).
+  jitter_minutes: 25
+
+jobs:
+  # Background search interval, and how far back each search looks (LinkedIn's f_TPR time
+  # filter). The window is longer than the interval so nothing slips between runs; duplicates
+  # are skipped automatically.
+  search_every_minutes: 30
+  time_window_minutes: 60
+  max_pages_per_query: 3      # 10 jobs per page
+  max_new_per_run: 80
+  sheet_path: Jobs.xlsx       # every job found is appended here
+  ai_scoring: true            # adds Fit score + Fit notes columns (one AI call per 6 new jobs)
+  scoring_parallel: 4         # AI scoring calls run at the same time
+  roles:
+    - AI Intern
+    - Machine Learning Intern
+    - Generative AI
+    - Data Science Intern
+    - AI Engineer
+  types: [internship, full-time]          # full-time | part-time | contract | internship
+  experience: [internship, entry]         # internship | entry | associate | mid-senior
+  locations:
+    - Bengaluru, Karnataka, India
+    - India
+  remote: true
+  remote_location: India      # where remote jobs must be open to (was "Worldwide", which added mostly US/EU jobs you can't take)
+  must_have_any: [python, ai, ml, llm, machine learning, genai, rag]
+  # Titles containing any of these are skipped (you're a student/intern — senior roles are noise).
+  exclude: [senior, "sr.", lead, manager, principal, staff, director, architect, head of, unpaid]
+  # Only notify for jobs Claude scores at or above this (0-100).
+  min_score: 60
+  sources:
+    linkedin_public: true   # LinkedIn's official public job-search URLs (no login, your account is never used)
+    remotive: false         # remotive.com remote jobs — off so the sheet is LinkedIn-only
+
+notify:
+  desktop: true    # macOS notification center
+  telegram: true   # used only if TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID are set in .env
+  email: false     # needs SMTP_* settings in .env

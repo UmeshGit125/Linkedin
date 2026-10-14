@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv init *)",
+      "Bash(uv sync *)",
+      "Bash(curl -s -o /tmp/claude-501/r.json -w \"%{http_code}\\\\n\" \"https://remotive.com/api/remote-jobs?search=machine%20learning&limit=30\")",
+      "Bash(claude -p --output-format json --tools \"\" --no-session-persistence --system-prompt \"You answer briefly.\" --json-schema '{\"type\":\"object\",\"properties\":{\"answer\":{\"type\":\"string\"}},\"required\":[\"answer\"],\"additionalProperties\":false}')",
+      "Bash(python3 -c \"import json,sys;d=json.load\\(sys.stdin\\);print\\({k:v for k,v in d.items\\(\\) if k not in\\('usage','modelUsage'\\)}\\)\")",
+      "Bash(cd /Users/umeshsharma/Desktop/Personal/Linkedin && grep -rn 'CFG\\\\[\"claude\"\\\\]' assistant/ | cat && sed -i '' 's/CFG\\\\[\"claude\"\\\\]/CFG[\"llm\"]/g' assistant/*.py && grep -rn 'CFG\\\\[\"claude\"\\\\]\\\\|Claude key' assistant/ | cat)",
+      "Bash(sqlite3 data/assistant.db \"DELETE FROM comment_drafts WHERE id=1\")",
+      "Bash(sqlite3 data/assistant.db \"SELECT status, COUNT\\(*\\) FROM jobs GROUP BY status;\")",
+      "Bash(sqlite3 data/assistant.db \"SELECT status, COUNT\\(*\\) FROM jobs GROUP BY status; SELECT COUNT\\(*\\) FROM jobs WHERE score_in_sheet=0 AND score IS NOT NULL;\")",
+      "Bash(cp -n .env.example .env)",
+      "Bash(chmod 600 .env)",
+      "Bash(sqlite3 data/assistant.db \"SELECT COUNT\\(*\\), SUM\\(score_in_sheet\\) FROM jobs;\")"
+    ],
+    "additionalDirectories": [
+      "/private/tmp/claude-501/assistant"
+    ]
+  }
+}
