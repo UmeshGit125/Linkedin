@@ -146,8 +146,35 @@ def to_commentary(body: str, hashtags: list[str]) -> str:
     return text
 
 
-def publish(body: str, hashtags: list[str]) -> str:
-    """Publishes a text post. Returns the post URN (urn:li:share:... / urn:li:ugcPost:...)."""
+def _headers(tok: dict) -> dict:
+    return {
+        "Authorization": f"Bearer {tok['access_token']}",
+        "LinkedIn-Version": _api_version(),
+        "X-Restli-Protocol-Version": "2.0.0",
+        "Content-Type": "application/json",
+    }
+
+
+def upload_image(path: str, tok: dict) -> str:
+    """Uploads an image through LinkedIn's Images API. Returns the image URN."""
+    r = requests.post(
+        "https://api.linkedin.com/rest/images?action=initializeUpload",
+        headers=_headers(tok),
+        json={"initializeUploadRequest": {"owner": tok["person_urn"]}},
+        timeout=30,
+    )
+    if r.status_code != 200:
+        raise LinkedInError(f"LinkedIn image upload could not start ({r.status_code}): {r.text}")
+    v = r.json()["value"]
+    with open(path, "rb") as f:
+        up = requests.put(v["uploadUrl"], data=f.read(), headers={"Authorization": f"Bearer {tok['access_token']}"}, timeout=120)
+    if up.status_code not in (200, 201):
+        raise LinkedInError(f"LinkedIn image upload failed ({up.status_code}): {up.text[:200]}")
+    return v["image"]
+
+
+def publish(body: str, hashtags: list[str], image_path: str | None = None, alt_text: str = "") -> str:
+    """Publishes a post, with an image when given. Returns the post URN (urn:li:share:... / urn:li:ugcPost:...)."""
     tok = token()
     payload = {
         "author": tok["person_urn"],
@@ -157,17 +184,9 @@ def publish(body: str, hashtags: list[str]) -> str:
         "lifecycleState": "PUBLISHED",
         "isReshareDisabledByAuthor": False,
     }
-    r = requests.post(
-        POSTS_URL,
-        headers={
-            "Authorization": f"Bearer {tok['access_token']}",
-            "LinkedIn-Version": _api_version(),
-            "X-Restli-Protocol-Version": "2.0.0",
-            "Content-Type": "application/json",
-        },
-        json=payload,
-        timeout=30,
-    )
+    if image_path:
+        payload["content"] = {"media": {"id": upload_image(image_path, tok), "altText": (alt_text or "")[:300]}}
+    r = requests.post(POSTS_URL, headers=_headers(tok), json=payload, timeout=30)
     if r.status_code != 201:
         raise LinkedInError(f"LinkedIn rejected the post ({r.status_code}): {r.text}")
     urn = r.headers.get("x-restli-id", "")

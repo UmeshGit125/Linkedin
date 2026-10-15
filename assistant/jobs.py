@@ -6,6 +6,8 @@ experience / work mode -> AI fit-score -> append to the Jobs sheet -> notify on 
 
 Nothing logs in as you, so your LinkedIn account is not involved. You apply yourself.
 """
+import html
+import json
 import random
 import re
 import time
@@ -184,6 +186,86 @@ def _remotive(role: str) -> list[dict]:
     return jobs
 
 
+YC_BASE = "https://www.ycombinator.com"
+INDIA = re.compile(r"\bIN\b|india|bengaluru|bangalore|mumbai|delhi|gurgaon|gurugram|noida|hyderabad|pune|chennai", re.I)
+
+
+def _yc_data(url: str) -> dict:
+    """The structured data Y Combinator embeds in its public job pages (no login, robots.txt allows /jobs)."""
+    try:
+        r = requests.get(url, headers=UA, timeout=30)
+    except requests.RequestException as e:
+        print(f"[jobs] YC network error: {type(e).__name__}")
+        return {}
+    if r.status_code == 429:
+        raise RateLimited()
+    m = re.search(r'data-page="([^"]+)"', r.text) if r.status_code == 200 else None
+    return json.loads(html.unescape(m.group(1))).get("props", {}) if m else {}
+
+
+def _years(text: str) -> int:
+    m = re.search(r"(\d+)", text or "")
+    return int(m.group(1)) if m else 0
+
+
+def _yc_can_apply(j: dict) -> bool:
+    """You're in India: the job must be based there, or remote with no US-only restriction."""
+    loc, visa = j.get("location", ""), j.get("visa", "")
+    if INDIA.search(loc):
+        return True
+    return "remote" in loc.lower() and "US citizen/visa only" not in visa and not re.search(r"remote \((?:US|CA|UK|GB|EU)", loc, re.I)
+
+
+def _yc_fresh(j: dict, max_days: int) -> bool:
+    age = (j.get("createdAt") or "").lower()
+    n = _years(age) or 1  # "about 1 month" / "22 days"
+    days = n * (365 if "year" in age else 30 if "month" in age else 1)
+    return days <= max_days
+
+
+def _yc_search() -> list[dict]:
+    yc = CFG["jobs"].get("yc", {})
+    out, seen = [], set()
+    for page in yc.get("pages", ["software-engineer/india", "software-engineer/remote", "science/india"]):
+        for j in _yc_data(f"{YC_BASE}/jobs/role/{page}").get("jobPostings", []):
+            if j["id"] in seen:
+                continue
+            seen.add(j["id"])
+            if (j.get("type") or "").lower() not in [t.lower() for t in CFG["jobs"].get("types", [])]:
+                continue
+            if _years(j.get("minExperience", "")) > int(yc.get("max_years", 2)) or not _yc_can_apply(j) or not _yc_fresh(j, int(yc.get("max_age_days", 30))):
+                continue
+            out.append({
+                "source": "yc",
+                "external_id": str(j["id"]),
+                "title": j["title"],
+                "company": f"{j.get('companyName', '')} (YC {j.get('companyBatchName', '')})".replace(" (YC )", ""),
+                "location": j.get("location", ""),
+                "url": YC_BASE + j["url"],
+                "apply_url": YC_BASE + j["url"],
+                "company_url": YC_BASE + j["companyUrl"],
+                "posted_ago": f"{j.get('createdAt', '')} ago",
+                "employment_type": j.get("type", ""),
+                "industries": j.get("companyOneLiner", ""),
+                "job_function": j.get("prettyRole", ""),
+                "salary": j.get("salaryRange", ""),
+                "seniority": j.get("minExperience", ""),
+                "work_mode": "Remote" if re.search(r"remote", j.get("location", ""), re.I) and not INDIA.search(j.get("location", "")) else "",
+                "yc_skills": j.get("skills") or [],
+            })
+        _pause()
+    return out
+
+
+def _yc_details(job: dict) -> dict:
+    d = _yc_data(job["url"]).get("job") or {}
+    desc = d.get("description", "")
+    extra = {"description": desc} if desc else {}
+    if INDIA.search(job["location"]) and "remote" in job["location"].lower():
+        extra["work_mode"] = "Remote"
+    return extra
+
+
 def tech_stack(text: str) -> str:
     low = text.lower()
     return ", ".join(name for name, pattern in TECH.items() if re.search(pattern, low))
@@ -208,6 +290,41 @@ def work_mode(job: dict) -> str:
     return ""
 
 
+_CURRENCY = [("CA$", "CAD"), ("MX$", "MXN"), ("US$", "USD"), ("CN¥", "CNY"), ("CHF", "CHF"), ("SGD", "SGD"),
+             ("PLN", "PLN"), ("INR", "INR"), ("₹", "INR"), ("£", "GBP"), ("€", "EUR"), ("₱", "PHP"), ("¥", "JPY"), ("$", "USD")]
+_PERIOD_TO_MONTH = {"yr": 1 / 12, "mo": 1, "wk": 52 / 12, "hr": 160}   # hourly: 160 working hours a month
+
+
+def monthly_inr(salary: str) -> float | None:
+    """Top of the stated pay range as INR per month, or None when it can't be read reliably."""
+    if not salary:
+        return None
+    mult = {"k": 1e3, "m": 1e6}
+    amounts = [
+        float(n.replace(",", "")) * mult.get(suffix.lower(), 1)
+        for n, suffix in re.findall(r"(\d[\d,]*(?:\.\d+)?)\s*([KkMm](?![a-zA-Z]))?", salary)
+    ]
+    period = re.search(r"/\s*(yr|mo|wk|hr)", salary)
+    cur = next((c for sym, c in _CURRENCY if sym in salary), None)
+    rate = CFG["jobs"].get("inr_per_unit", {}).get(cur)
+    if not (amounts and rate):
+        return None
+    # Y Combinator lists yearly pay without a period unless it says "monthly".
+    value = max(amounts) * _PERIOD_TO_MONTH[period.group(1) if period else "yr"] * rate
+    return value if value >= 1000 else None  # "$1.00/yr" style placeholders are not real pay
+
+
+def passes_salary(salary: str, work_mode: str) -> bool:
+    jc = CFG["jobs"]
+    limits = jc.get("min_monthly_inr")
+    if not limits:
+        return True
+    pay = monthly_inr(salary)
+    if pay is None:
+        return bool(jc.get("keep_unknown_salary", True))
+    return pay >= limits["remote" if work_mode == "Remote" else "office"]
+
+
 def _passes_keywords(job: dict) -> bool:
     jc = CFG["jobs"]
     title = job["title"].lower()
@@ -227,6 +344,11 @@ def collect(conn) -> int:
     """Fetches new postings into the DB. Returns how many were new."""
     jc = CFG["jobs"]
     found: list[dict] = []
+    if jc["sources"].get("yc"):  # first and on its own: LinkedIn's rate limits must not skip it
+        try:
+            found += _yc_search()
+        except Exception as e:
+            print(f"[jobs] Y Combinator search failed: {type(e).__name__}: {e}")
     try:
         if jc["sources"].get("linkedin_public"):
             for role in jc["roles"]:
@@ -259,11 +381,18 @@ def collect(conn) -> int:
                 print("[jobs] rate-limited while fetching details; saving what we have.")
                 break
             _pause()
+        elif job["source"] == "yc":
+            try:
+                job.update(_yc_details(job))
+            except RateLimited:
+                print("[jobs] YC rate-limited; saving what we have.")
+                break
+            _pause()
         full = f"{job['title']}\n{job.get('description', '')}"
         job["tech_stack"] = tech_stack(full)
         job["experience"] = experience_required(job.get("description", ""))
         job["work_mode"] = work_mode(job)
-        job["status"] = "new" if _passes_keywords(job) else "filtered"
+        job["status"] = "new" if _passes_keywords(job) and passes_salary(job.get("salary", ""), job["work_mode"]) else "filtered"
         job["found_at"] = now()
         conn.execute(
             f"INSERT OR IGNORE INTO jobs({', '.join(FIELDS)}) VALUES({', '.join('?' * len(FIELDS))})",
@@ -332,23 +461,35 @@ def score(conn) -> int:
 
 def notify_matches(conn) -> int:
     min_score = CFG["jobs"]["min_score"]
-    rows = conn.execute(
-        "SELECT * FROM jobs WHERE status = 'scored' AND score >= ? ORDER BY score DESC", (min_score,)
-    ).fetchall()
-    conn.execute("UPDATE jobs SET status = 'notified' WHERE status = 'scored' AND score >= ?", (min_score,))
+    rows = [
+        r for r in conn.execute(
+            "SELECT * FROM jobs WHERE status = 'scored' AND score >= ? ORDER BY score DESC", (min_score,)
+        ).fetchall()
+        if passes_salary(r["salary"] or "", r["work_mode"] or "")
+    ]
+    for r in rows:
+        conn.execute("UPDATE jobs SET status = 'notified' WHERE id = ?", (r["id"],))
     conn.execute("UPDATE jobs SET status = 'low-fit' WHERE status = 'scored'")
     conn.commit()
     if not rows:
         return 0
     strong = sum(r["verdict"] == "strong" for r in rows)
-    lines = [
-        f"{r['score']} · {r['title']} — {r['company']} ({r['location']})\n   {r['url']}"
-        for r in rows
-    ]
-    notify.send(
-        f"🎯 {len(rows)} new job match{'es' if len(rows) != 1 else ''} ({strong} strong)",
-        "\n\n".join(lines) + f"\n\nAll jobs are in {sheet.path().name}",
-    )
+    title = f"🎯 {len(rows)} new job match{'es' if len(rows) != 1 else ''} ({strong} strong)"
+    lines = [f"{r['score']} · {r['title']} — {r['company']} ({r['location']})\n   {r['url']}" for r in rows]
+    summary = "\n\n".join(lines) + f"\n\nAll jobs are in {sheet.path().name}"
+    if not (CFG["notify"].get("telegram") and notify.env("TELEGRAM_BOT_TOKEN")):
+        notify.send(title, summary)
+        return len(rows)
+    # Telegram gets one card per job with Apply / Cover letter / Applied / Skip buttons.
+    notify.send(title, summary, telegram=False)
+    cards = 8
+    try:
+        notify.tg_send(title + (f"\nShowing the top {cards}; the rest are in {sheet.path().name}." if len(rows) > cards else ""))
+        for r in rows[:cards]:
+            notify.send_job_card(r)
+    except Exception as e:
+        print(f"[jobs] telegram cards failed: {e}")
+    return len(rows)
     return len(rows)
 
 

@@ -38,6 +38,10 @@ posting:
     authority: "18:00"
   # Random +/- minutes around each slot time (natural variation, per your docs).
   jitter_minutes: 25
+  posts_per_day: 1                 # one draft a day, rotating tofu -> mofu -> authority
+  daily_draft_time: "08:00"        # when the day's draft arrives in Telegram for your approval
+  publish_on_approve: true         # tapping Approve publishes immediately (false = wait for the slot time)
+  variants: 3                      # how many options /post <topic> returns
 
 jobs:
   # Background search interval, and how far back each search looks (LinkedIn's f_TPR time
@@ -66,11 +70,32 @@ jobs:
   must_have_any: [python, ai, ml, llm, machine learning, genai, rag]
   # Titles containing any of these are skipped (you're a student/intern — senior roles are noise).
   exclude: [senior, "sr.", lead, manager, principal, staff, director, architect, head of, unpaid]
+  # Pay filter, in INR per month. A job is dropped only when its stated pay (top of the range) is below the
+  # limit; jobs that show no pay are kept, because most LinkedIn listings (about 95%) don't show one.
+  # Anything not clearly remote counts as office. Other currencies and yearly/hourly pay are converted.
+  min_monthly_inr:
+    office: 30000
+    remote: 20000
+  keep_unknown_salary: true
+  inr_per_unit: {USD: 88, CAD: 63, EUR: 102, GBP: 116, CHF: 110, SGD: 68, CNY: 12, JPY: 0.6, PLN: 24, MXN: 4.8, PHP: 1.5, INR: 1}   # rough rates, edit freely
   # Only notify for jobs Claude scores at or above this (0-100).
   min_score: 60
+  yc:
+    pages: [software-engineer/india, software-engineer/remote, science/india]   # ycombinator.com/jobs/role/<this>
+    max_years: 2            # skip roles asking for more than this many years
+    max_age_days: 60        # YC listings stay up for months, so look back further than LinkedIn
   sources:
     linkedin_public: true   # LinkedIn's official public job-search URLs (no login, your account is never used)
+    yc: true                # Y Combinator startup jobs (public pages, no login): India-based or remote-friendly only
     remotive: false         # remotive.com remote jobs — off so the sheet is LinkedIn-only
+
+image:
+  # Used only when IMAGE_API_KEY is set in .env. Any OpenAI-compatible /images/generations endpoint.
+  size: 1024x1024
+  timeout_seconds: 180
+
+telegram:
+  digest_time: "09:30"             # daily message: hiring-post searches + your watchlist
 
 notify:
   desktop: true    # macOS notification center

@@ -6,7 +6,7 @@ import sys
 import tempfile
 from datetime import datetime
 
-from . import comments, jobs, knowledge, linkedin, notify, posts, scheduler, sheet
+from . import bot, comments, docsgen, jobs, knowledge, linkedin, notify, posts, scheduler, sheet
 from .config import CFG, TZ, env
 from .db import connect
 from .linkedin import LinkedInError
@@ -182,6 +182,15 @@ def cmd_comment(conn, a):
         print(f"Skip this one. {c['reasoning']}")
 
 
+def cmd_bot(conn, a):
+    bot.run()
+
+
+def cmd_docs(conn, a):
+    for key, state in docsgen.draft_missing(force=a.force):
+        print(f"  {key}: {state}")
+
+
 def cmd_run(conn, a):
     scheduler.tick(conn)
 
@@ -248,6 +257,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--done", type=int, help="mark comment draft as posted")
     s.set_defaults(fn=cmd_comment)
 
+    sub.add_parser("bot", help="run the Telegram bot (approvals, /post, /comment)").set_defaults(fn=cmd_bot)
+    s = sub.add_parser("docs", help="draft the missing rule documents for your review")
+    s.add_argument("--force", action="store_true", help="also redraft docs that exist and are empty-or-drafted")
+    s.set_defaults(fn=cmd_docs)
     sub.add_parser("run", help="one scheduler tick: publish due posts, search jobs").set_defaults(fn=cmd_run)
     s = sub.add_parser("schedule", help="install/remove the background scheduler")
     s.add_argument("action", choices=["install", "uninstall"])

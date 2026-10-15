@@ -55,6 +55,12 @@ CREATE TABLE IF NOT EXISTS comment_drafts (
     reasoning TEXT,
     status TEXT NOT NULL             -- drafted | posted | skipped
 );
+CREATE TABLE IF NOT EXISTS watchlist (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    url TEXT,
+    added_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);
 """
 
@@ -72,14 +78,24 @@ JOB_EXTRA_COLUMNS = [
 ]
 
 
+POST_EXTRA_COLUMNS = ["image_prompt TEXT", "alt_text TEXT", "image_path TEXT", "parent_id INTEGER"]
+COMMENT_EXTRA_COLUMNS = ["options TEXT"]
+
+
+def _migrate(conn, table: str, columns: list[str]) -> None:
+    existing = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+    for col in columns:
+        if col.split()[0] not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
+
+
 def connect() -> sqlite3.Connection:
     conn = sqlite3.connect(DATA_DIR / "assistant.db", timeout=30)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
-    existing = {r["name"] for r in conn.execute("PRAGMA table_info(jobs)")}
-    for col in JOB_EXTRA_COLUMNS:
-        if col.split()[0] not in existing:
-            conn.execute(f"ALTER TABLE jobs ADD COLUMN {col}")
+    _migrate(conn, "jobs", JOB_EXTRA_COLUMNS)
+    _migrate(conn, "posts", POST_EXTRA_COLUMNS)
+    _migrate(conn, "comment_drafts", COMMENT_EXTRA_COLUMNS)
     conn.commit()
     return conn
 
