@@ -110,7 +110,7 @@ def _writer_system() -> str:
         "first comments and hashtags. If MY_POST_EXAMPLES is present, copy his voice from it: sentence length, "
         "vocabulary, openings, how he ends. Facts about projects and learning come only from the master "
         "document and MY_LEARNING_AND_PROJECTS; anything marked '(nothing added yet)' is not available.\n\n"
-        f"{knowledge.no_names_rule()} "
+        f"{knowledge.no_names_rule()} {knowledge.independent_rule()} "
         "You may also write accurate, general explanations of techniques beyond what he built (for example other "
         "RAG variants: what they are, how they work, when to use them), following the notes he left in "
         "LinkedIn_Creator_Research. Only state what is well established and say so when unsure; first-person "
@@ -159,12 +159,13 @@ def _insert(conn, d: PostDraft, slot: str, parent_id: int | None = None, schedul
 
 def attach_image(conn, post_id: int) -> None:
     """Generates the post's image when an image API is configured. A failure never blocks the post."""
-    p = conn.execute("SELECT image_prompt FROM posts WHERE id = ?", (post_id,)).fetchone()
-    if not (p and p["image_prompt"] and imagegen.enabled()):
+    p = conn.execute("SELECT image_prompt, hook, topic FROM posts WHERE id = ?", (post_id,)).fetchone()
+    if not (p and imagegen.enabled()):
         return
+    idea = p["image_prompt"] or f"the idea: {p['topic'] or p['hook']}"  # the model often leaves it empty; every post still gets a picture
     try:
-        path = imagegen.generate(p["image_prompt"], DATA_DIR / "images" / f"post_{post_id}.png")
-        conn.execute("UPDATE posts SET image_path = ? WHERE id = ?", (str(path), post_id))
+        path = imagegen.generate(idea, DATA_DIR / "images" / f"post_{post_id}.png")
+        conn.execute("UPDATE posts SET image_path = ?, image_prompt = ? WHERE id = ?", (str(path), idea, post_id))
         conn.commit()
     except Exception as e:
         print(f"[image] post #{post_id}: {e}")
@@ -174,7 +175,7 @@ def draft(conn, slot: str, topic_hint: str = "", notify_result: bool = True) -> 
     prompt = (
         f"Write one post for the {slot.upper()} slot.\nSlot definition: {SLOT_LABEL[slot]}\n"
         f"Today: {datetime.now(TZ):%A %d %B %Y}.\n"
-        + (f"Topic direction from {OWNER}: {topic_hint}\n" if topic_hint else "Choose the topic yourself from his topics to own.\n")
+        + (f"Topic direction from {OWNER}: {topic_hint}\n" if topic_hint else "Choose a topic yourself from applied AI / LLM engineering in general (an explainer, mechanism, common mistake or comparison), not from his own projects.\n")
         + "\nRecent posts — do not repeat their hooks, structures or angles:\n"
         + _recent_posts(conn)
         + "\n\n" + FIELD_RULES
@@ -192,9 +193,9 @@ def variants(conn, topic: str, n: int | None = None) -> list[int]:
     prompt = (
         f"{OWNER} wants a post about this topic: {topic}\n"
         f"Write {n} genuinely different posts on it: different angle, structure and post type each "
-        "(for example one story or observation, one speaking to the ICP's problem, one technical "
-        "lesson or opinion). Use only real experience from the documents; if the topic needs a fact "
-        "you do not have, write around it and list the question.\n"
+        "(for example one mental model, one common mistake and how to avoid it, one clear opinion with reasons). "
+        "Each must stand alone as an explainer or opinion about the topic, never a story about his own projects or work. "
+        "If the topic needs a fact you do not have, write around it and list the question.\n"
         f"Today: {datetime.now(TZ):%A %d %B %Y}.\n\nRecent posts — do not repeat their hooks, structures or angles:\n"
         + _recent_posts(conn) + "\n\n" + FIELD_RULES
     )
@@ -289,6 +290,11 @@ def verify(conn, post_id: int, notify_result: bool = True) -> GateResult:
     g = llm.structured(system, prompt, GateResult, CFG["llm"]["effort_writing"])
 
     leaked = knowledge.banned_names(f"{p['body']} {p['first_comment'] or ''} {p['hook'] or ''} {p['topic'] or ''} {p['image_prompt'] or ''} {p['alt_text'] or ''}")
+    mine = knowledge.project_mentions(f"{p['body']} {p['first_comment'] or ''}")
+    if mine:  # independent posts: no stories about his own projects/work
+        g.final_status = "BLOCKED"
+        g.problems = [*g.problems, f"Talks about his own projects/work ({', '.join(mine)}). Posts must stand alone as explainers."]
+        g.blocked_reason = "; ".join(g.problems)
     if leaked:  # enforced in code, whatever the model said
         g.final_status = "BLOCKED"
         g.problems = [*g.problems, f"Names a private project/employer ({', '.join(leaked)}). Say 'one of my projects' instead."]

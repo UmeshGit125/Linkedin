@@ -43,6 +43,9 @@ posting:
   publish_on_approve: true         # tapping Approve publishes immediately (false = wait for the slot time)
   # Names that must never appear in a public post or comment (office projects/employer). Posts say "one of my projects" instead.
   never_name: [Souli, CallAudit, "PW LeapX", PWLeapX, LeapX, "Physics Wallah"]
+  # Posts are standalone explainers. A post that talks about his own projects (even unnamed) is blocked.
+  independent_posts: true
+  project_phrases: 'one of my projects|my projects?\b|a project (i|we)\b|the project (i|we)\b|i (built|shipped|deployed)\b|while (building|working on)\b|at work\b|my (team|office|company|employer|intern)|(we|i) (split|moved|switched|rewrote|changed) (it|the)'
   variants: 3                      # how many options /post <topic> returns
 
 jobs:

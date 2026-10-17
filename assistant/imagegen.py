@@ -7,9 +7,9 @@ import requests
 from .config import CFG, env
 
 STYLE = (
-    "Clean editorial illustration for a professional LinkedIn post about applied AI. "
-    "Flat, modern, calm colour palette, lots of whitespace. No text, no letters, no logos, "
-    "no real people or faces, no charts with invented numbers. Subject: "
+    "Minimal abstract illustration made only of simple geometric shapes, soft lines and a few flat colours "
+    "(deep blue, teal, warm orange) on a plain light background, lots of empty space, calm professional mood. "
+    "Purely visual and wordless: shapes and arrows only. Concept to suggest: "
 )
 
 

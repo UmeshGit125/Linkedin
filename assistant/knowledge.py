@@ -162,3 +162,25 @@ def add_note(section: str, text: str) -> Path:
         lines += ["", heading, bullet]
     path.write_text("\n".join(lines) + "\n")
     return path
+
+
+def independent_rule() -> str:
+    if not CFG["posting"].get("independent_posts", True):
+        return ""
+    return (
+        "INDEPENDENT POSTS (default): write each post as a standalone piece about the topic itself: how it works, "
+        "why it fails, a common mistake, a comparison, a mental model, a clear opinion with reasons, a worked example "
+        "with made-up-but-labelled data. Do NOT tell stories about his own projects, work, team, employer or builds, "
+        "not even unnamed ('one of my projects', 'while building', 'I built', 'at work', 'we split it'). "
+        "Do not invent anecdotes. Use first person only for an opinion or a learning that is written in "
+        "MY_LEARNING_AND_PROJECTS (for example something he is currently learning). "
+        "Teach something specific and correct; if unsure a technical claim is accurate, leave it out."
+    )
+
+
+def project_mentions(text: str) -> list[str]:
+    """Phrases in the text that point at his own projects/work (posting.project_phrases)."""
+    pat = CFG["posting"].get("project_phrases", "")
+    if not pat or not CFG["posting"].get("independent_posts", True):
+        return []
+    return sorted({m.group(0).lower() for m in re.finditer(pat, text or "", re.I)})
