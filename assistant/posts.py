@@ -110,7 +110,11 @@ def _writer_system() -> str:
         "first comments and hashtags. If MY_POST_EXAMPLES is present, copy his voice from it: sentence length, "
         "vocabulary, openings, how he ends. Facts about projects and learning come only from the master "
         "document and MY_LEARNING_AND_PROJECTS; anything marked '(nothing added yet)' is not available.\n\n"
-        f"{knowledge.no_names_rule()}\n\n"
+        f"{knowledge.no_names_rule()} "
+        "You may also write accurate, general explanations of techniques beyond what he built (for example other "
+        "RAG variants: what they are, how they work, when to use them), following the notes he left in "
+        "LinkedIn_Creator_Research. Only state what is well established and say so when unsure; first-person "
+        "experience claims still need his notes.\n\n"
         f"{docs}\n\n{knowledge.NO_FABRICATION}{knowledge.unavailable_note(missing)}"
     )
 
@@ -263,7 +267,7 @@ def verify(conn, post_id: int, notify_result: bool = True) -> GateResult:
     )
     same_day = conn.execute(
         """SELECT id, slot, status, scheduled_for FROM posts WHERE id != ? AND status IN ('approved','published')
-           AND substr(scheduled_for,1,10) = ? ORDER BY scheduled_for""",
+           AND substr(COALESCE(published_at, scheduled_for),1,10) = ? ORDER BY scheduled_for""",
         (post_id, (p["scheduled_for"] or "")[:10]),
     ).fetchall()
     day_plan = "\n".join(f"  #{r['id']} {r['slot']} at {r['scheduled_for']} ({r['status']})" for r in same_day)
@@ -284,7 +288,7 @@ def verify(conn, post_id: int, notify_result: bool = True) -> GateResult:
     )
     g = llm.structured(system, prompt, GateResult, CFG["llm"]["effort_writing"])
 
-    leaked = knowledge.banned_names(f"{p['body']} {p['first_comment'] or ''} {p['hook'] or ''}")
+    leaked = knowledge.banned_names(f"{p['body']} {p['first_comment'] or ''} {p['hook'] or ''} {p['topic'] or ''} {p['image_prompt'] or ''} {p['alt_text'] or ''}")
     if leaked:  # enforced in code, whatever the model said
         g.final_status = "BLOCKED"
         g.problems = [*g.problems, f"Names a private project/employer ({', '.join(leaked)}). Say 'one of my projects' instead."]

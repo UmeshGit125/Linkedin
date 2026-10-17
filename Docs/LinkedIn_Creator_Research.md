@@ -43,12 +43,14 @@ An entry can be Tier 1 and Category B at the same time; tier is about subject ma
 
 ---
 
-## Section 3 — Topics worth following (each maps to real work)
+## Section 3 — Topics worth following (each maps to real work) 
 
-| Topic | Why it matters to Umesh | Connected project |
+hard rule :- all the project are there from my professinal part we will never use there names instead we will say in one my project i vface this issue 
+
+| Topic | Why it matters to Umesh | Connected project | we can user other data than this project but we have to make sure its real and aithenticate may be used by someone else on the linkedi or soemthing available on youtube for the sanity of that particulat info this is how we will user any techstack 
 |---|---|---|
-| RAG that actually retrieves the right thing | Retrieval quality is the failure mode, not model choice | Souli |
-| Voice AI in practice (speech-to-text + dialogue state + LLM) | Latency, turn-taking, and state management are under-discussed | Souli |
+| RAG that actually retrieves the right thing | Retrieval quality is the failure mode, not model choice | Souli | we can use other varinats of rag explaining them and telling how they work when to we user but make sure to check the info we are sharing is't wrong 
+| Voice AI in practice (speech-to-text + dialogue state + LLM) | Latency, turn-taking, and state management are under-discussed | Souli | more about this other than what i built 
 | Using LLMs to evaluate conversations | Structured, role-based evaluation of transcripts | CallAudit |
 | Making agents reliable (tool-calling, deterministic logic, ambiguity reduction) | Reliability is the real gap between demos and use | AI personal assistant |
 | Automation workflows with LLMs | Classification, routing, conditional personalisation | Email assistant |

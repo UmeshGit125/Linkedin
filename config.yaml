@@ -42,7 +42,7 @@ posting:
   daily_draft_time: "08:00"        # when the day's draft arrives in Telegram for your approval
   publish_on_approve: true         # tapping Approve publishes immediately (false = wait for the slot time)
   # Names that must never appear in a public post or comment (office projects/employer). Posts say "one of my projects" instead.
-  never_name: [Souli, CallAudit, "PW LeapX", LeapX]
+  never_name: [Souli, CallAudit, "PW LeapX", PWLeapX, LeapX, "Physics Wallah"]
   variants: 3                      # how many options /post <topic> returns
 
 jobs:

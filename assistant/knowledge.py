@@ -26,7 +26,7 @@ DOC_KEYS = {
 
 # Which docs each task needs, following the "Read order by task" section of the README.
 TASK_DOCS = {
-    "write_post": ["master", "my_learning", "my_posts", "operating", "learning_memory", "first_comment", "hashtag", "scheduling"],
+    "write_post": ["master", "my_learning", "my_posts", "creator_research", "operating", "learning_memory", "first_comment", "hashtag", "scheduling"],
     "verify_post": ["verification", "master", "my_learning", "operating", "first_comment", "hashtag", "scheduling", "learning_memory"],
     "comment": ["comment_intel", "creator_research", "master", "my_learning"],
 }
