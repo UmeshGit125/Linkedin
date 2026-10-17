@@ -157,7 +157,8 @@ def send_job_card(j) -> None:
 def job_buttons(j) -> list[list[dict]]:
     return [
         [link("Open & apply ↗", j["apply_url"] or j["url"])],
-        [btn("📝 Cover letter", f"jc:{j['id']}"), btn("✅ Applied", f"ja:{j['id']}"), btn("🙈 Skip", f"jx:{j['id']}")],
+        [btn("📝 Cover letter", f"jc:{j['id']}"), btn("📄 Tailor resume", f"jr:{j['id']}")],
+        [btn("✅ Applied", f"ja:{j['id']}"), btn("🙈 Skip", f"jx:{j['id']}")],
     ]
 
 

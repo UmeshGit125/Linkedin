@@ -41,6 +41,8 @@ posting:
   posts_per_day: 1                 # one draft a day, rotating tofu -> mofu -> authority
   daily_draft_time: "08:00"        # when the day's draft arrives in Telegram for your approval
   publish_on_approve: true         # tapping Approve publishes immediately (false = wait for the slot time)
+  # Names that must never appear in a public post or comment (office projects/employer). Posts say "one of my projects" instead.
+  never_name: [Souli, CallAudit, "PW LeapX", LeapX]
   variants: 3                      # how many options /post <topic> returns
 
 jobs:
@@ -81,7 +83,10 @@ jobs:
   # Only notify for jobs Claude scores at or above this (0-100).
   min_score: 60
   yc:
-    pages: [software-engineer/india, software-engineer/remote, science/india]   # ycombinator.com/jobs/role/<this>
+    pages: [software-engineer/india, software-engineer/remote, science/india, science/remote, location/india, location/remote, role/software-engineer,
+            location/bengaluru, location/new-delhi, location/gurugram, location/noida, location/mumbai, location/pune, location/hyderabad]   # ycombinator.com/jobs/<role/... or location/...>; a bare name means role/<name>
+    title_regex: '(engineer|developer|software|sde|\bml\b|machine learning|\bai\b|\bllm|data|research|scientist|full.?stack|back.?end|front.?end|devops|forward deployed)'   # skip sales/marketing/legal roles
+    title_exclude: '(staff|principal|head of|director|senior|sr\.|lead\b|mechanical|electrical|firmware|hardware|filmmaker|gtm|sales|marketing)'   # too senior or not your field
     max_years: 2            # skip roles asking for more than this many years
     max_age_days: 60        # YC listings stay up for months, so look back further than LinkedIn
   sources:

@@ -227,11 +227,15 @@ def _yc_search() -> list[dict]:
     yc = CFG["jobs"].get("yc", {})
     out, seen = [], set()
     for page in yc.get("pages", ["software-engineer/india", "software-engineer/remote", "science/india"]):
-        for j in _yc_data(f"{YC_BASE}/jobs/role/{page}").get("jobPostings", []):
+        for j in _yc_data(f"{YC_BASE}/jobs/{page if page.startswith(('role/', 'location/')) else 'role/' + page}").get("jobPostings", []):
             if j["id"] in seen:
                 continue
             seen.add(j["id"])
             if (j.get("type") or "").lower() not in [t.lower() for t in CFG["jobs"].get("types", [])]:
+                continue
+            if re.search(yc.get("title_exclude", "(?!)"), j.get("title", ""), re.I):
+                continue
+            if not re.search(yc.get("title_regex", "."), f"{j.get('title', '')} {j.get('prettyRole', '')}", re.I):
                 continue
             if _years(j.get("minExperience", "")) > int(yc.get("max_years", 2)) or not _yc_can_apply(j) or not _yc_fresh(j, int(yc.get("max_age_days", 30))):
                 continue
@@ -530,5 +534,53 @@ def cover_letter(conn, job_id: int) -> str:
         f"# {j['title']} — {j['company']}\n{j['url']}\n\n{c.letter}\n\n---\nFit: {c.fit_summary}\n"
         + ("Gaps to address: " + "; ".join(c.gaps_to_address) if c.gaps_to_address else "")
     )
+    (out_dir / f"job_{job_id}.md").write_text(text)
+    return text
+
+
+class ResumeBullet(BaseModel):
+    section: str        # e.g. "Souli" or "PW LeapX"
+    text: str
+
+
+class TailoredResume(BaseModel):
+    summary: str
+    skills_order: list[str]      # skill groups/lines, most relevant to the job first, wording from the resume only
+    bullets: list[ResumeBullet]  # reworded or reordered bullets, each backed by the resume or notes
+    changes: list[str]           # plain list of what changed versus the original, and why
+    not_claimed: list[str]       # what the job wants that the resume/notes do not show (never added)
+
+
+def tailor_resume(conn, job_id: int) -> str:
+    """A job-specific version of the resume text for you to review. Never adds a skill, project or number
+    that is not already in the resume or Docs/MY_LEARNING_AND_PROJECTS.md."""
+    j = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    if j is None:
+        raise ValueError(f"No job #{job_id}.")
+    notes = knowledge.find("my_learning")
+    notes_text = notes.read_text(errors="ignore").strip() if notes else ""
+    system = (
+        "You tailor a resume for one job. You may reorder, shorten and re-word what is already there, "
+        "and lead with what the job cares about. You must NOT add any skill, tool, project, employer, number or "
+        "responsibility that is not stated in <resume> or <notes>. If the job wants something the candidate has "
+        "not shown, list it in not_claimed instead of adding it. Keep the candidate's real titles and dates. "
+        "Plain, specific, human wording; no buzzword padding. Items in <notes> marked '(nothing added yet)' are empty.\n\n"
+        f"<resume>\n{knowledge.resume_text()}\n</resume>\n\n<notes>\n{notes_text}\n</notes>\n\n{knowledge.NO_FABRICATION}"
+    )
+    prompt = (
+        f"Job: {j['title']} at {j['company']} ({j['location']})\n{j['url']}\n\n"
+        f"Description:\n{j['description'] or '(not available: tailor to the job title and company one-liner: ' + (j['industries'] or '') + ')'}"
+    )
+    r = llm.structured(system, prompt, TailoredResume, CFG["llm"]["effort_writing"])
+    text = (
+        f"TAILORED RESUME NOTES: {j['title']} at {j['company']}\n"
+        "Review before using. Paste these into your own resume; nothing here has been sent anywhere.\n\n"
+        f"SUMMARY\n{r.summary}\n\nSKILLS (in this order)\n" + "\n".join(f"• {s}" for s in r.skills_order)
+        + "\n\nBULLETS\n" + "\n".join(f"• [{b.section}] {b.text}" for b in r.bullets)
+        + "\n\nWHAT I CHANGED\n" + "\n".join(f"• {c}" for c in r.changes)
+        + ("\n\nJOB WANTS, BUT YOUR RESUME DOESN'T SHOW (not added)\n" + "\n".join(f"• {c}" for c in r.not_claimed) if r.not_claimed else "")
+    )
+    out_dir = DATA_DIR / "resumes"
+    out_dir.mkdir(exist_ok=True)
     (out_dir / f"job_{job_id}.md").write_text(text)
     return text

@@ -20,13 +20,15 @@ DOC_KEYS = {
     "first_comment": "firstcomment",
     "learning_memory": "learningmemory",
     "creator_research": "creatorresearch",
+    "my_learning": "mylearning",       # Docs/MY_LEARNING_AND_PROJECTS.md, written by Umesh
+    "my_posts": "mypostexamples",      # Docs/MY_POST_EXAMPLES.md, written by Umesh
 }
 
 # Which docs each task needs, following the "Read order by task" section of the README.
 TASK_DOCS = {
-    "write_post": ["master", "operating", "learning_memory", "first_comment", "hashtag", "scheduling"],
-    "verify_post": ["verification", "master", "operating", "first_comment", "hashtag", "scheduling", "learning_memory"],
-    "comment": ["comment_intel", "creator_research", "master"],
+    "write_post": ["master", "my_learning", "my_posts", "operating", "learning_memory", "first_comment", "hashtag", "scheduling"],
+    "verify_post": ["verification", "master", "my_learning", "operating", "first_comment", "hashtag", "scheduling", "learning_memory"],
+    "comment": ["comment_intel", "creator_research", "master", "my_learning"],
 }
 
 NO_FABRICATION = (
@@ -114,3 +116,49 @@ def candidate_profile() -> str:
         parts.append(positioning)
     parts.append(f"<resume>\n{resume}\n</resume>" if resume else "(No resume provided yet.)")
     return "\n\n".join(parts)
+
+
+def no_names_rule() -> str:
+    names = ", ".join(CFG["posting"].get("never_name", []))
+    return (
+        "PRIVACY RULE FOR EVERYTHING PUBLIC (posts, first comments, comments): never name his projects, "
+        f"products or employer ({names}, or any other project name from the documents) because they belong to his office. "
+        "Talk about the experience without the name: say 'one of my projects', 'a project I built', 'a side project', "
+        "'a system I worked on'. Technical lessons are fine; internal details, data and client information are not."
+    )
+
+
+def banned_names(text: str) -> list[str]:
+    """Names from posting.never_name that appear in the text (case-insensitive)."""
+    return [n for n in CFG["posting"].get("never_name", []) if re.search(re.escape(n), text or "", re.I)]
+
+
+NOTE_SECTIONS = {   # key -> (button label, heading in Docs/MY_LEARNING_AND_PROJECTS.md)
+    "learning": ("📚 Learning now", "## What I am learning right now"),
+    "lesson": ("🧯 Hard lesson", "## Things I learned the hard way"),
+    "project": ("🛠 Project detail", "## Project details beyond the resume"),
+    "number": ("🔢 Measured number", "## Real numbers I can state"),
+    "opinion": ("💡 Opinion", "## Opinions I actually hold"),
+    "avoid": ("🚫 Don't post about", "## Topics I do NOT want to post about"),
+}
+
+
+def add_note(section: str, text: str) -> Path:
+    """Append one bullet to a section of Docs/MY_LEARNING_AND_PROJECTS.md (created if missing)."""
+    path = find("my_learning") or (DOCS_DIR / "MY_LEARNING_AND_PROJECTS.md")
+    lines = path.read_text(errors="ignore").splitlines() if path.exists() else []
+    heading = NOTE_SECTIONS[section][1]
+    bullet = "- " + " ".join(text.split())
+    for i, line in enumerate(lines):
+        if line.startswith(heading):
+            end = next((k for k in range(i + 1, len(lines)) if lines[k].startswith("## ")), len(lines))
+            lines = lines[:i + 1] + [l for l in lines[i + 1:end] if "(nothing added yet)" not in l] + lines[end:]
+            end = next((k for k in range(i + 1, len(lines)) if lines[k].startswith("## ")), len(lines))
+            while end > i + 1 and not lines[end - 1].strip():
+                end -= 1
+            lines.insert(end, bullet)
+            break
+    else:
+        lines += ["", heading, bullet]
+    path.write_text("\n".join(lines) + "\n")
+    return path

@@ -107,7 +107,10 @@ def _writer_system() -> str:
     return (
         f"You write LinkedIn posts for {OWNER}, strictly following his content system below. "
         "The documents are the authority on positioning, voice, series, hooks, proof rules, "
-        "first comments and hashtags.\n\n"
+        "first comments and hashtags. If MY_POST_EXAMPLES is present, copy his voice from it: sentence length, "
+        "vocabulary, openings, how he ends. Facts about projects and learning come only from the master "
+        "document and MY_LEARNING_AND_PROJECTS; anything marked '(nothing added yet)' is not available.\n\n"
+        f"{knowledge.no_names_rule()}\n\n"
         f"{docs}\n\n{knowledge.NO_FABRICATION}{knowledge.unavailable_note(missing)}"
     )
 
@@ -280,6 +283,12 @@ def verify(conn, post_id: int, notify_result: bool = True) -> GateResult:
         "Recent posts for the repetition check (this post is not in the list):\n" + _recent_posts(conn, exclude_id=post_id)
     )
     g = llm.structured(system, prompt, GateResult, CFG["llm"]["effort_writing"])
+
+    leaked = knowledge.banned_names(f"{p['body']} {p['first_comment'] or ''} {p['hook'] or ''}")
+    if leaked:  # enforced in code, whatever the model said
+        g.final_status = "BLOCKED"
+        g.problems = [*g.problems, f"Names a private project/employer ({', '.join(leaked)}). Say 'one of my projects' instead."]
+        g.blocked_reason = "; ".join(g.problems)
 
     # The gate's hard rule, enforced in code too: any applicable failure means BLOCKED.
     if any(getattr(g, f) == "fail" for f in GATE_FIELDS):

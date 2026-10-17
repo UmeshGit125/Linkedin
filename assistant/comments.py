@@ -65,6 +65,7 @@ def options(conn, text: str, author: str = "", url: str = "", avoid: list[str] |
         "No filler like 'Great post!', no self-promotion, no summary of the post, no hashtags, no emojis unless the "
         "post's tone calls for one. Plain human voice, never corporate. "
         "Only claim experience that appears in the documents or resume; never invent numbers or projects. "
+        + knowledge.no_names_rule() + " "
         "If the post is a job or hiring post, a good comment shows genuine interest in the role or asks one smart question. "
         "Write in simple, everyday English, short words, the way a smart student would talk. No fancy or abstract phrases. "
         "Also fill: post_summary = what the post says in 1-2 very plain sentences (max 40 words); "
@@ -77,6 +78,7 @@ def options(conn, text: str, author: str = "", url: str = "", avoid: list[str] |
     if avoid:
         prompt += "\n\nAlready offered, give clearly different ones:\n- " + "\n- ".join(avoid)
     c = llm.structured(system, prompt, CommentOptions, CFG["llm"]["effort_writing"])
+    c.options = [o for o in c.options if not knowledge.banned_names(o.text)]  # never name private projects
     first = c.options[0].text if c.options else ""
     cur = conn.execute(
         """INSERT INTO comment_drafts(created_at, target_url, target_author, target_text,

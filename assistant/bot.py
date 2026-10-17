@@ -16,7 +16,7 @@ from urllib.parse import quote
 
 import requests
 
-from . import comments, jobs, notify, posts
+from . import comments, jobs, knowledge, notify, posts
 from .config import CFG, TZ, env
 from .db import connect, get_kv, now, set_kv
 from .notify import btn, link, tg_send
@@ -27,6 +27,7 @@ HELP = """LinkedIn assistant
 /comment  then send (or forward) a post: get comment options
 Any forwarded post or pasted post text also gets comment options.
 /jobs  latest job matches
+/learn  add what you are learning, lessons, opinions (used by the writer)
 /hiring  LinkedIn searches for hiring posts (last 24h)
 /watch add Name | profile-url   /watch list   /watch remove <id>
 /status  what is waiting
@@ -103,7 +104,7 @@ def digest(conn) -> None:
     else:
         text.append("2. Your watchlist is empty. Add people worth reading: /watch add Name | profile-url")
     text.append("\nForward any post here and I'll write you comment options for it.")
-    tg_send("\n".join(text), rows)
+    tg_send("\n".join(text), rows + [[btn("📚 Update what I'm learning", "ln:menu")]])
 
 
 # ---- actions ----------------------------------------------------------------------------------
@@ -138,6 +139,15 @@ def do_comment(conn, text: str, author: str = "") -> None:
     present_comment(conn, cid)
 
 
+def save_note(conn, section: str, text: str) -> None:
+    leaked = knowledge.banned_names(text)
+    knowledge.add_note(section, text)
+    label = knowledge.NOTE_SECTIONS[section][0]
+    tg_send(f"Saved under {label}. Future posts and comments can use it."
+            + (f"\n⚠️ It contains {', '.join(leaked)}. Posts will not use that name, but you may want to reword it." if leaked else ""),
+            [[btn("➕ Add another", "ln:menu")]])
+
+
 def _author(msg: dict) -> str:
     o = msg.get("forward_origin") or {}
     u = o.get("sender_user") or {}
@@ -169,6 +179,13 @@ def cmd_watch(conn, arg: str) -> None:
     else:
         rows = conn.execute("SELECT * FROM watchlist ORDER BY id").fetchall()
         tg_send("\n".join(f"{w['id']}. {w['name']} {w['url'] or ''}" for w in rows) or "Watchlist is empty. Add: /watch add Name | profile-url")
+
+
+def learn_menu() -> None:
+    labels = list(knowledge.NOTE_SECTIONS.items())
+    rows = [[btn(lab, f"ln:{k}") for k, (lab, _) in labels[i:i + 2]] for i in range(0, len(labels), 2)]
+    tg_send("What do you want to add? The post and comment writer will use it as true facts about you. "
+            "Don't use office project names.", rows)
 
 
 def cmd_jobs(conn) -> None:
@@ -212,6 +229,12 @@ def on_message(conn, msg: dict) -> None:
         cmd_jobs(conn)
     elif cmd == "/hiring":
         digest(conn)
+    elif cmd == "/learn":
+        if arg:
+            _clear_pending(conn)
+            save_note(conn, "learning", arg)
+        else:
+            learn_menu()
     elif cmd == "/watch":
         cmd_watch(conn, arg)
     elif cmd == "/status":
@@ -222,6 +245,9 @@ def on_message(conn, msg: dict) -> None:
         _clear_pending(conn)
         tg_send("Rewriting with your changes… a minute or two.")
         present_post(conn, posts.redraft(conn, pending["post_id"], text), "Revised")
+    elif pending and pending.get("type") == "note":
+        _clear_pending(conn)
+        save_note(conn, pending["section"], text)
     elif pending and pending.get("type") == "post_topic":
         _clear_pending(conn)
         start_variants(conn, text)
@@ -279,6 +305,15 @@ def on_callback(conn, cq: dict) -> None:
     elif action == "jc":
         tg_send("Writing the cover letter…")
         tg_send(jobs.cover_letter(conn, n))
+    elif action == "ln":
+        if arg == "menu":
+            learn_menu()
+        elif arg in knowledge.NOTE_SECTIONS:
+            set_kv(conn, "pending", {"type": "note", "section": arg})
+            tg_send(f"{knowledge.NOTE_SECTIONS[arg][0]}: send me one line (or a few). Send /cancel to stop.")
+    elif action == "jr":
+        tg_send("Tailoring your resume for this job. Takes a minute…")
+        tg_send(jobs.tailor_resume(conn, n))
     elif action in ("ja", "jx", "ju"):
         status = {"ja": "applied", "jx": "ignored", "ju": "notified"}[action]
         conn.execute("UPDATE jobs SET status = ? WHERE id = ?", (status, n))
@@ -327,6 +362,7 @@ def run() -> None:
             {"command": "comment", "description": "Comment options for a post"},
             {"command": "jobs", "description": "Latest job matches"},
             {"command": "hiring", "description": "Hiring-post searches"},
+            {"command": "learn", "description": "Add what you are learning"},
             {"command": "watch", "description": "People to follow"},
             {"command": "status", "description": "What is waiting"},
             {"command": "cancel", "description": "Drop the current question"},

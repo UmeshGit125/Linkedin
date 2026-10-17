@@ -163,6 +163,8 @@ def cmd_jobs(conn, a):
         print(f"Job #{a.id} → {a.status}")
     elif a.action == "letter":
         print(jobs.cover_letter(conn, a.id))
+    elif a.action == "resume":
+        print(jobs.tailor_resume(conn, a.id))
 
 
 def cmd_comment(conn, a):
@@ -243,7 +245,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(fn=cmd_metrics)
 
     s = sub.add_parser("jobs", help="job/internship search")
-    s.add_argument("action", choices=["search", "sheet", "list", "show", "mark", "letter"])
+    s.add_argument("action", choices=["search", "sheet", "list", "show", "mark", "letter", "resume"])
     s.add_argument("id", type=int, nargs="?")
     s.add_argument("status", nargs="?")
     s.add_argument("--all", action="store_true")
@@ -271,7 +273,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv=None):
     a = build_parser().parse_args(argv)
-    if a.cmd == "jobs" and a.action in ("show", "mark", "letter") and a.id is None:
+    if a.cmd == "jobs" and a.action in ("show", "mark", "letter", "resume") and a.id is None:
         sys.exit(f"jobs {a.action} needs a job id.")
     conn = connect()
     try:
